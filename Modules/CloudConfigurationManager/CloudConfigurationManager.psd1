@@ -43,7 +43,8 @@
         'CloudConfigurationManager.psm1'
     )
 
-    CmdletsToExport        = @('Test-CCMConfiguration')
+    CmdletsToExport        = @('Start-CCMConfiguration',
+                               'Test-CCMConfiguration')
 
     # Variables to export from this module
     VariablesToExport      = '*'

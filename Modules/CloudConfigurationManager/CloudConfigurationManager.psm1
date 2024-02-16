@@ -62,20 +62,16 @@
 
             # If the property's value is a variable, try to retrieve its value from the list of
             # parameters provided by the user.
-            if ($propertyValue.StartsWith('$'))
+            if ($propertyValue.ToString().StartsWith('$'))
             {
                 $propertyVariableName = $propertyValue.Substring(1)
                 $propertyValue = $Parameters.$propertyVariableName
             }
 
-            # If the property is an empty array, explicitely define it as empty instead of null.
-            if ([System.String]::IsNullOrEmpty($propertyValue) -and $CimProperty.PropertyType.EndsWith('[]]'))
-            {
-                $propertyValue = @('')
-            }
             $propertiesToSend.Add($propertyName, $propertyValue)
         }
     }
+    $propertiesToSend.Add("Verbose", $PSCmdlet.MyInvocation.BoundParameters.Verbose)
     return $propertiesToSend
 }
 
@@ -110,10 +106,6 @@ function Test-CCMConfiguration
     [CmdletBinding()]
     [OutputType([System.Boolean])]
     param(
-        [Parameter(Mandatory = $true)]
-        [System.String]
-        $ModuleName,
-
         [Parameter(ParameterSetName = 'Path')]
         [System.String]
         $Path,
@@ -130,36 +122,113 @@ function Test-CCMConfiguration
     $Global:CCMAllDrifts = @()
     $currentLoadedModule = ''
 
-    $currentInstance = $null
+    # Parse the content of the content of the configuration file into an array of PowerShell object. 
     $resourceInstances = Get-CCMParsedResources -Path $Path `
                                                 -Content $Content
+
+    # Loop through all resource instances in the parsed configuration file. 
+    $i = 1
     foreach ($instance in $resourceInstances)
     {
         $ResourceName = $instance.ResourceName
         $ResourceInstanceName = $instance.ResourceInstanceName
 
+        Write-Verbose -Message "[Test-CCMConfiguration]: Resource [$i/$($resourceInstances.Length)]"
+
+        # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
                                                     -Parameters $Parameters
         # Load the resource's module.
-        if ($resourceName -ne $currentLoadedModule)
+        if ($ResourceName -ne $currentLoadedModule)
         {            
             $ResourceInfo = Get-DSCResource -Name $ResourceName
             Import-Module $ResourceInfo.Path -Force
-            $currentLoadedModule = $resourceName
+            $currentLoadedModule = $ResourceName
         }
         
         # Evaluate the properties of the current resource.
+        Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
         $currentResult = Test-TargetResource @propertiesToSend
+        Write-Verbose -Message "[Test-CCMConfiguration]: Test-TargetResource for {$ResourceInstanceName} returned {$currentResult}"
 
         # If a drift was detected, augment its related info with the name of the
         # current instance and collect it in the CCMAllDrifts Global Variable.
         if (-not $currentResult)
         {
             $TestResult = $false
-            $currentDrift = $Global:M365DSCCurrentDriftInfo
-            $currentDrift.Add('InstanceName', $ResourceInstanceName)
-            $Global:CCMAllDrifts += $currentDrift
+
+            # If the the current resource's module implements the CCM Drift pattern, collect
+            # and enrich the information related to the drift from the CCMCurrentDriftInfo Global variable.
+            # This variable needs to be populated from the resource's module.
+            if ($null -ne $Global:CCMCurrentDriftInfo)
+            {
+                $currentDrift = $Global:CCMCurrentDriftInfo
+                $currentDrift.Add('InstanceName', $ResourceInstanceName)
+                $Global:CCMAllDrifts += $currentDrift
+            }
         }
+        $i++
     }
+    Write-Verbose -Message "[Test-CCMConfiguration]: Returned {$TestResult}"
     return $TestResult
+}
+
+function Start-CCMConfiguration
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(ParameterSetName = 'Path')]
+        [System.String]
+        $Path,
+
+        [Parameter(ParameterSetName = 'Content')]
+        [System.String]
+        $Content,
+
+        [Parameter()]
+        [System.Collections.Hashtable]
+        $Parameters
+    )
+    $currentLoadedModule = ''
+
+    # Parse the content of the content of the configuration file into an array of PowerShell object. 
+    $resourceInstances = Get-CCMParsedResources -Path $Path `
+                                                -Content $Content `
+                                                -Verbose:$PSCmdlet.MyInvocation.BoundParameters.Verbose
+
+    # Loop through all resource instances in the parsed configuration file. 
+    $i = 1
+    foreach ($instance in $resourceInstances)
+    {
+        $ResourceName = $instance.ResourceName
+        $ResourceInstanceName = $instance.ResourceInstanceName
+
+        Write-Verbose -Message "[Start-CCMConfiguration]: Resource [$i/$($resourceInstances.Length)]"
+        # Retrieve the Hashtable representing the parameters to be sent to the Test method.
+        $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
+                                                    -Parameters $Parameters `
+                                                    -Verbose:$PSCmdlet.MyInvocation.BoundParameters.Verbose
+        # Load the resource's module.
+        if ($ResourceName -ne $currentLoadedModule)
+        {            
+            $ResourceInfo = Get-DSCResource -Name $ResourceName
+            Import-Module $ResourceInfo.Path -Force
+            $currentLoadedModule = $ResourceName
+        }
+        
+        # Evaluate the properties of the current resource.
+        Write-Verbose -Message "[Start-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
+        $currentResult = Test-TargetResource @propertiesToSend
+        Write-Verbose -Message "[Start-CCMConfiguration]: Test-TargetResource for {$ResourceInstanceName} returned {$currentResult}"
+
+        # If a drift was detected, apply the defined configuration for the resource instance by
+        # calling into the Set-TargetResource method of the resource.
+        if (-not $currentResult)
+        {
+            Write-Verbose -Message "[Start-CCMConfiguration]: Calling Set-TargetResource for {$ResourceInstanceName}"
+            Set-TargetResource @propertiesToSend
+            Write-Verbose -Message "[Start-CCMConfiguration]: Configuration applied successfully for {$ResourceInstanceName}"
+        }
+        $i++
+    }
 }
