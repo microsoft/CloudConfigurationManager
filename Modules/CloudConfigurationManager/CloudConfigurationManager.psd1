@@ -36,7 +36,12 @@
     PowerShellVersion      = '5.1'
 
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules        = @()
+    RequiredModules        = @(
+        @{
+            ModuleName = "DSCParser"; 
+            ModuleVersion = "1.4.0.2"; 
+       }
+    )
 
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
     NestedModules          = @(
