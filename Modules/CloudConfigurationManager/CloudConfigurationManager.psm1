@@ -71,7 +71,6 @@
             $propertiesToSend.Add($propertyName, $propertyValue)
         }
     }
-    $propertiesToSend.Add("Verbose", $PSCmdlet.MyInvocation.BoundParameters.Verbose)
     return $propertiesToSend
 }
 
@@ -140,9 +139,9 @@ function Test-CCMConfiguration
                                                     -Parameters $Parameters
         # Load the resource's module.
         if ($ResourceName -ne $currentLoadedModule)
-        {            
+        {
             $ResourceInfo = Get-DSCResource -Name $ResourceName
-            Import-Module $ResourceInfo.Path -Force
+            Import-Module $ResourceInfo.Path -Force -Verbose:$false
             $currentLoadedModule = $ResourceName
         }
         
@@ -193,8 +192,7 @@ function Start-CCMConfiguration
 
     # Parse the content of the content of the configuration file into an array of PowerShell object. 
     $resourceInstances = Get-CCMParsedResources -Path $Path `
-                                                -Content $Content `
-                                                -Verbose:$PSCmdlet.MyInvocation.BoundParameters.Verbose
+                                                -Content $Content
 
     # Loop through all resource instances in the parsed configuration file. 
     $i = 1
@@ -204,15 +202,16 @@ function Start-CCMConfiguration
         $ResourceInstanceName = $instance.ResourceInstanceName
 
         Write-Verbose -Message "[Start-CCMConfiguration]: Resource [$i/$($resourceInstances.Length)]"
+
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
-                                                    -Parameters $Parameters `
-                                                    -Verbose:$PSCmdlet.MyInvocation.BoundParameters.Verbose
+                                                    -Parameters $Parameters
+
         # Load the resource's module.
         if ($ResourceName -ne $currentLoadedModule)
-        {            
+        {
             $ResourceInfo = Get-DSCResource -Name $ResourceName
-            Import-Module $ResourceInfo.Path -Force
+            Import-Module $ResourceInfo.Path -Force -Verbose:$false
             $currentLoadedModule = $ResourceName
         }
         
