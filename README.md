@@ -20,8 +20,10 @@ A Hashtable to represents the list of variables defined within the configuration
 
 ## Example
 
+```powershell
 $creds = Get-Credential
 Start-CCMConfiguration -Path 'C:\dsc\M365TenantConfig.ps1' `
-                       -Parameters @{
-                         Credscredential = $creds
-                       }
+    -Parameters @{
+    Credscredential = $creds
+}
+```

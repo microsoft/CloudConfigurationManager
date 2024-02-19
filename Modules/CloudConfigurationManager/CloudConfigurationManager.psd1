@@ -9,56 +9,56 @@
 @{
 
     # Script module or binary module file associated with this manifest.
-    RootModule             = 'CloudConfigurationManager.psm1'
+    RootModule        = 'CloudConfigurationManager.psm1'
 
     # Version number of this module.
-    ModuleVersion          = '1.0.0.0'
+    ModuleVersion     = '1.0.0.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
 
     # ID used to uniquely identify this module
-    GUID                   = '9ed0756e-74ba-4ca5-832f-62e5da25b6d3'
+    GUID              = '9ed0756e-74ba-4ca5-832f-62e5da25b6d3'
 
     # Author of this module
-    Author                 = 'Microsoft Corporation'
+    Author            = 'Microsoft Corporation'
 
     # Company or vendor of this module
-    CompanyName            = 'Microsoft Corporation'
+    CompanyName       = 'Microsoft Corporation'
 
     # Copyright statement for this module
-    Copyright              = '(c) 2024 Microsoft Corporation. All rights reserved.'
+    Copyright         = '(c) 2024 Microsoft Corporation. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description            = 'Checks the current status of connections to (and as required, prompts for login to) various Microsoft Cloud platforms.'
+    Description       = 'The Cloud Configuration Manager (CCM) is a serverless alternative to the PowerShell Desired State Configuration (DSC) engine known as the Local Configuration Manager (LCM).'
 
     # Minimum version of the Windows PowerShell engine required by this module
-    PowerShellVersion      = '5.1'
+    PowerShellVersion = '5.1'
 
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules        = @(
+    RequiredModules   = @(
         @{
-            ModuleName = "DSCParser"; 
+            ModuleName    = "DSCParser"; 
             ModuleVersion = "1.4.0.2"; 
-       }
+        }
     )
 
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-    NestedModules          = @(
+    NestedModules     = @(
         'CloudConfigurationManager.psm1'
     )
 
-    CmdletsToExport        = @('Start-CCMConfiguration',
-                               'Test-CCMConfiguration')
+    CmdletsToExport   = @('Start-CCMConfiguration',
+        'Test-CCMConfiguration')
 
     # Variables to export from this module
-    VariablesToExport      = '*'
+    VariablesToExport = '*'
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-    AliasesToExport        = @()
+    AliasesToExport   = @()
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
-    PrivateData            = @{
+    PrivateData       = @{
 
         PSData = @{
 
