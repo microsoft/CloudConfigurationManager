@@ -38,13 +38,29 @@
 
             $cimResult = Expand-CCMCimProperty -CimInstanceValue $currentInstance.$propertyName
 
-            if ($null -eq $cimResult)
+            if ($null -ne $cimResult)
             {
-                throw "Failed to expand the CIMInstance property [$propertyName] for the resource [$ResourceName]"
+                if ($currentInstance.$propertyName -is [System.Array])
+                {
+                    $cimResult = [Microsoft.Management.Infrastructure.CimInstance[]]$cimResult
+                    if ($cimResult.Count -ne $currentInstance.$propertyName.Count)
+                    {
+                        throw "Failed to expand the CIMInstance property '$propertyName' for the resource {$ResourceInstanceName}. `
+                        The number of expanded instances '$($cimResult.Count)' does not match the number of instances '$($currentInstance.$propertyName.Count)' in the configuration."
+                    }
+                }
+
+                $propertiesToSend.Add($propertyName, $cimResult)
+
+            }
+            elseif ($currentInstance.$propertyName.Count -eq 0)
+            {
+                # If the property is empty, add an empty array to the list.
+                $propertiesToSend.Add($propertyName, [Microsoft.Management.Infrastructure.CimInstance[]]@())
             }
             else
             {
-                $propertiesToSend.Add($propertyName, [Microsoft.Management.Infrastructure.CimInstance[]]$cimResult)
+                throw "Failed to expand the CIMInstance property '$propertyName' for the resource {$ResourceInstanceName}"
             }
         }
         else
@@ -218,7 +234,7 @@ function Test-CCMConfiguration
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
-        $currentResult = Test-TargetResource @propertiesToSend
+        #$currentResult = Test-TargetResource @propertiesToSend
         Write-Verbose -Message "[Test-CCMConfiguration]: Test-TargetResource for {$ResourceInstanceName} returned {$currentResult}"
 
         # If a drift was detected, augment its related info with the name of the
