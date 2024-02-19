@@ -77,10 +77,10 @@ function Expand-CCMCimProperty
 
     $cimInstanceProperties = @{}
 
-    # if ($CimInstanceValue -notin [System.Array])
-    # {
-    #     $CimInstanceValue = @($CimInstanceValue)
-    # }
+    if ($CimInstanceValue -notin [System.Array])
+    {
+        $CimInstanceValue = @($CimInstanceValue)
+    }
 
     $cimPropertyNameBlacklist = @( 'CIMInstance', 'ResourceName')
 
@@ -96,16 +96,34 @@ function Expand-CCMCimProperty
             if ($cimSubPropertyName -notin $cimPropertyNameBlacklist)
             {
                 $cimSubPropertyValue = $cimInstance.$cimSubPropertyName
-                if ($cimSubPropertyValue -is [System.Collections.Specialized.OrderedDictionary])
+                if ($cimSubPropertyValue -isnot [System.Array])
                 {
-                    $cimSubPropertyValue = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValue
+                    $cimSubPropertyValue = @($cimSubPropertyValue)
+                }
+                foreach ($cimSubPropertyValueItem in $cimSubPropertyValue)
+                {
+                    if ($cimSubPropertyValueItem -is [System.Collections.Specialized.OrderedDictionary])
+                    {
+                        $cimSubPropertyValueItem = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValueItem
+                    }
+                    else
+                    {
+                        $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue[0]) | Out-Null
+                    }
                 }
 
-                $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue) | Out-Null
+                # if ($cimSubPropertyValue.GetType().Name -eq "OrderedDictionary")
+                # {
+                #     $cimSubPropertyValue = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValue
+                # }
+                # else
+                # {
+                #     $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue) | Out-Null
+                # }
             }
         }
 
-        $cimResult += New-CimInstance -ClassName $cimInstance.CIMInstance `
+        $cimResults += New-CimInstance -ClassName "$($cimInstance.CIMInstance)" `
             -Property $cimInstanceProperties `
             -ClientOnly
     }
@@ -194,7 +212,7 @@ function Test-CCMConfiguration
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
-        #$currentResult = Test-TargetResource @propertiesToSend
+        $currentResult = Test-TargetResource @propertiesToSend
         Write-Verbose -Message "[Test-CCMConfiguration]: Test-TargetResource for {$ResourceInstanceName} returned {$currentResult}"
 
         # If a drift was detected, augment its related info with the name of the
