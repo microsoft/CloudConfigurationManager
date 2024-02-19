@@ -34,7 +34,7 @@
         if ($CimProperty.PropertyType.StartsWith('[MSFT_'))
         {
 
-            $cimResult = Expand-CCMCimProperty -CimInstaneValue $currentInstance.$propertyName
+            $cimResult = Expand-CCMCimProperty -CimInstanceValue $currentInstance.$propertyName
 
             if ($null -eq $cimResult)
             {
@@ -77,25 +77,25 @@ function Expand-CCMCimProperty
 
     $cimInstanceProperties = @{}
 
-    if ($CimInstanceValue -notin [System.Array])
-    {
-        $CimInstanceValue = @(CimInstanceValue)
-    }
+    # if ($CimInstanceValue -notin [System.Array])
+    # {
+    #     $CimInstanceValue = @($CimInstanceValue)
+    # }
 
     $cimPropertyNameBlacklist = @( 'CIMInstance', 'ResourceName')
 
     $cimResults = @()
 
-    #iterate over each object within the CimInstanceValueArray
+    #Iterate over each object within the CimInstanceValueArray
     foreach ($cimInstance in $CimInstanceValue)
     {
         $cimInstanceProperties = @{}
         # this is the current CIM Instance
-        foreach ($cimSubPropertyName in $cimEntry.Keys)
+        foreach ($cimSubPropertyName in $cimInstance.Keys)
         {
             if ($cimSubPropertyName -notin $cimPropertyNameBlacklist)
             {
-                $cimSubPropertyValue = $cimEntry.$cimSubPropertyName
+                $cimSubPropertyValue = $cimInstance.$cimSubPropertyName
                 if ($cimSubPropertyValue -is [System.Collections.Specialized.OrderedDictionary])
                 {
                     $cimSubPropertyValue = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValue
@@ -104,6 +104,7 @@ function Expand-CCMCimProperty
                 $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue) | Out-Null
             }
         }
+
         $cimResult += New-CimInstance -ClassName $cimInstance.CIMInstance `
             -Property $cimInstanceProperties `
             -ClientOnly
@@ -193,7 +194,7 @@ function Test-CCMConfiguration
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
-        $currentResult = Test-TargetResource @propertiesToSend
+        #$currentResult = Test-TargetResource @propertiesToSend
         Write-Verbose -Message "[Test-CCMConfiguration]: Test-TargetResource for {$ResourceInstanceName} returned {$currentResult}"
 
         # If a drift was detected, augment its related info with the name of the
