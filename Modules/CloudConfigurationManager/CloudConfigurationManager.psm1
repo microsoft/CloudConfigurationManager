@@ -234,7 +234,7 @@ function Test-CCMConfiguration
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
-        #$currentResult = Test-TargetResource @propertiesToSend
+        $currentResult = Test-TargetResource @propertiesToSend
         Write-Verbose -Message "[Test-CCMConfiguration]: Test-TargetResource for {$ResourceInstanceName} returned {$currentResult}"
 
         # If a drift was detected, augment its related info with the name of the
