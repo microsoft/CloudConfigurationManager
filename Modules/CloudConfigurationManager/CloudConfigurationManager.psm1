@@ -11,6 +11,8 @@
         [System.Collections.Hashtable]
         $Parameters
     )
+
+    # Clone the instance to avoid modifying the original object.
     $currentInstance = ([System.Collections.Hashtable]$instance).Clone()
 
     $ResourceName = $currentInstance.ResourceName
@@ -75,14 +77,15 @@ function Expand-CCMCimProperty
         $CimInstanceValue
     )
 
-    $cimInstanceProperties = @{}
-
+    # If the property is not an array, convert it to an array for further processing.
+    # This is necessary as the property can be a single value or an array of values.
     if ($CimInstanceValue -notin [System.Array])
     {
         $CimInstanceValue = @($CimInstanceValue)
     }
 
-    $cimPropertyNameBlacklist = @( 'CIMInstance', 'ResourceName')
+    # Blacklist of properties that should not be included in the final result.
+    $cimPropertyNameBlacklist = @('CIMInstance', 'ResourceName')
 
     $cimResults = @()
 
@@ -90,44 +93,47 @@ function Expand-CCMCimProperty
     foreach ($cimInstance in $CimInstanceValue)
     {
         $cimInstanceProperties = @{}
-        # this is the current CIM Instance
+
         foreach ($cimSubPropertyName in $cimInstance.Keys)
         {
+            # If the property is not in the blacklist, add it to the property table.
             if ($cimSubPropertyName -notin $cimPropertyNameBlacklist)
             {
+                # Retrieve the property value
                 $cimSubPropertyValue = $cimInstance.$cimSubPropertyName
+
+                # If the property is not an array, convert it to an array for further processing.
+                # This is necessary as the property can be a single value or an array of values.
                 if ($cimSubPropertyValue -isnot [System.Array])
                 {
                     $cimSubPropertyValue = @($cimSubPropertyValue)
                 }
+
+                # Iterate over each value within the property array
                 foreach ($cimSubPropertyValueItem in $cimSubPropertyValue)
                 {
+                    # If the value is a CIMInstance, expand it.
                     if ($cimSubPropertyValueItem -is [System.Collections.Specialized.OrderedDictionary])
                     {
+                        # Recursively expand the CIMInstance
                         $cimSubPropertyValueItem = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValueItem
                     }
                     else
                     {
+                        # Add the value to the property table
                         $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue[0]) | Out-Null
                     }
                 }
-
-                # if ($cimSubPropertyValue.GetType().Name -eq "OrderedDictionary")
-                # {
-                #     $cimSubPropertyValue = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValue
-                # }
-                # else
-                # {
-                #     $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue) | Out-Null
-                # }
             }
         }
 
+        # Create a new CIMInstance with the expanded properties
         $cimResults += New-CimInstance -ClassName "$($cimInstance.CIMInstance)" `
             -Property $cimInstanceProperties `
             -ClientOnly
     }
 
+    # Return the expanded CIMInstances
     return [Microsoft.Management.Infrastructure.CimInstance[]]$cimResults
 }
 
