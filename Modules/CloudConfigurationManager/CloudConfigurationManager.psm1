@@ -6,11 +6,13 @@
         [Parameter(Mandatory = $true)]
         [System.Collections.Hashtable]
         $Instance,
-        
+
         [Parameter()]
         [System.Collections.Hashtable]
         $Parameters
     )
+
+    # Clone the instance to avoid modifying the original object.
     $currentInstance = ([System.Collections.Hashtable]$instance).Clone()
 
     $ResourceName = $currentInstance.ResourceName
@@ -19,41 +21,47 @@
     $ResourceInstanceName = $currentInstance.ResourceInstanceName
     $currentInstance.Remove('ResourceInstanceName') | Out-Null
 
+    Write-Verbose -Message "[Get-CCMPropertiesToSend]: Calling Get-CCMPropertiesToSend for {$ResourceInstanceName}"
+
     # Retrieve information about the DSC resource
-    $dscResourceInfo = Get-DSCResource -Name $ResourceName
+    $dscResourceInfo = Get-DscResource -Name $ResourceName
 
     $propertiesToSend = @{}
     foreach ($propertyName in $currentInstance.Keys)
     {
         # Retrieve the CIM Instance Property.
-        $CimProperty = $dscResourceInfo.Properties | Where-Object -FilterScript {$_.Name -eq $propertyName}
+        $CimProperty = $dscResourceInfo.Properties | Where-Object -FilterScript { $_.Name -eq $propertyName }
 
         # If the current propertry is a CIMInstance
         if ($CimProperty.PropertyType.StartsWith('[MSFT_'))
         {
-            $cimResult = @()
 
-            # Loop through all CIMInstances in the property
-            foreach ($cimEntry in $currentInstance.$propertyName)
+            $cimResult = Expand-CCMCimProperty -CimInstanceValue $currentInstance.$propertyName
+
+            if ($null -ne $cimResult)
             {
-                $cimInstanceProperties = @{}
-
-                # Loop through all properties of the CIMInstance
-                foreach ($cimSubPropertyName in $cimEntry.Keys)
+                if ($currentInstance.$propertyName -is [System.Array])
                 {
-                    if ($cimSubPropertyName -ne 'CIMInstance')
+                    $cimResult = [Microsoft.Management.Infrastructure.CimInstance[]]$cimResult
+                    if ($cimResult.Count -ne $currentInstance.$propertyName.Count)
                     {
-                        $cimInstanceProperties.Add($cimSubPropertyName, $cimEntry.$cimSubPropertyName)
+                        throw "Failed to expand the CIMInstance property '$propertyName' for the resource {$ResourceInstanceName}. `
+                        The number of expanded instances '$($cimResult.Count)' does not match the number of instances '$($currentInstance.$propertyName.Count)' in the configuration."
                     }
                 }
 
-                $CimInstanceName = ([Array]$currentInstance.$propertyName.CIMInstance)[0]
-                $propertyCIMInstanceValue = New-CimInstance -ClassName $CimInstanceName `
-                                                            -Property $cimInstanceProperties `
-                                                            -ClientOnly
-                $cimResult += $propertyCIMInstanceValue
+                $propertiesToSend.Add($propertyName, $cimResult)
+
             }
-            $propertiesToSend.Add($propertyName, [Microsoft.Management.Infrastructure.CimInstance[]]$cimResult)
+            elseif ($currentInstance.$propertyName.Count -eq 0)
+            {
+                # If the property is empty, add an empty array to the list.
+                $propertiesToSend.Add($propertyName, [Microsoft.Management.Infrastructure.CimInstance[]]@())
+            }
+            else
+            {
+                throw "Failed to expand the CIMInstance property '$propertyName' for the resource {$ResourceInstanceName}"
+            }
         }
         else
         {
@@ -72,6 +80,77 @@
         }
     }
     return $propertiesToSend
+}
+
+function Expand-CCMCimProperty
+{
+
+    [CmdletBinding()]
+    [OutputType([Microsoft.Management.Infrastructure.CimInstance[]])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Object]
+        $CimInstanceValue
+    )
+
+    # If the property is not an array, convert it to an array for further processing.
+    # This is necessary as the property can be a single value or an array of values.
+    if ($CimInstanceValue -notin [System.Array])
+    {
+        $CimInstanceValue = @($CimInstanceValue)
+    }
+
+    # Blacklist of properties that should not be included in the final result.
+    $cimPropertyNameBlacklist = @('CIMInstance', 'ResourceName')
+
+    $cimResults = @()
+
+    #Iterate over each object within the CimInstanceValueArray
+    foreach ($cimInstance in $CimInstanceValue)
+    {
+        $cimInstanceProperties = @{}
+
+        foreach ($cimSubPropertyName in $cimInstance.Keys)
+        {
+            # If the property is not in the blacklist, add it to the property table.
+            if ($cimSubPropertyName -notin $cimPropertyNameBlacklist)
+            {
+                # Retrieve the property value
+                $cimSubPropertyValue = $cimInstance.$cimSubPropertyName
+
+                # If the property is not an array, convert it to an array for further processing.
+                # This is necessary as the property can be a single value or an array of values.
+                if ($cimSubPropertyValue -isnot [System.Array])
+                {
+                    $cimSubPropertyValue = @($cimSubPropertyValue)
+                }
+
+                # Iterate over each value within the property array
+                foreach ($cimSubPropertyValueItem in $cimSubPropertyValue)
+                {
+                    # If the value is a CIMInstance, expand it.
+                    if ($cimSubPropertyValueItem -is [System.Collections.Specialized.OrderedDictionary])
+                    {
+                        # Recursively expand the CIMInstance
+                        $cimSubPropertyValueItem = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValueItem
+                    }
+                    else
+                    {
+                        # Add the value to the property table
+                        $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue[0]) | Out-Null
+                    }
+                }
+            }
+        }
+
+        # Create a new CIMInstance with the expanded properties
+        $cimResults += New-CimInstance -ClassName "$($cimInstance.CIMInstance)" `
+            -Property $cimInstanceProperties `
+            -ClientOnly
+    }
+
+    # Return the expanded CIMInstances
+    return [Microsoft.Management.Infrastructure.CimInstance[]]$cimResults
 }
 
 function Get-CCMParsedResources
@@ -97,6 +176,14 @@ function Get-CCMParsedResources
     {
         $resourceInstances = ConvertTo-DSCObject -Content $Content
     }
+
+    # This will fix an issue with single resource configurations as in this case
+    # the return will be a single object. Therfore further processing of the object will fail.
+    if ($resourceInstances -isnot [System.Array])
+    {
+        $resourceInstances = @($resourceInstances)
+    }
+
     return $resourceInstances
 }
 
@@ -121,11 +208,11 @@ function Test-CCMConfiguration
     $Global:CCMAllDrifts = @()
     $currentLoadedModule = ''
 
-    # Parse the content of the content of the configuration file into an array of PowerShell object. 
+    # Parse the content of the content of the configuration file into an array of PowerShell object.
     $resourceInstances = Get-CCMParsedResources -Path $Path `
-                                                -Content $Content
+        -Content $Content
 
-    # Loop through all resource instances in the parsed configuration file. 
+    # Loop through all resource instances in the parsed configuration file.
     $i = 1
     foreach ($instance in $resourceInstances)
     {
@@ -136,15 +223,15 @@ function Test-CCMConfiguration
 
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
-                                                    -Parameters $Parameters
+            -Parameters $Parameters
         # Load the resource's module.
         if ($ResourceName -ne $currentLoadedModule)
         {
-            $ResourceInfo = Get-DSCResource -Name $ResourceName
+            $ResourceInfo = Get-DscResource -Name $ResourceName
             Import-Module $ResourceInfo.Path -Force -Verbose:$false
             $currentLoadedModule = $ResourceName
         }
-        
+
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
         $currentResult = Test-TargetResource @propertiesToSend
@@ -190,11 +277,11 @@ function Start-CCMConfiguration
     )
     $currentLoadedModule = ''
 
-    # Parse the content of the content of the configuration file into an array of PowerShell object. 
+    # Parse the content of the content of the configuration file into an array of PowerShell object.
     $resourceInstances = Get-CCMParsedResources -Path $Path `
-                                                -Content $Content
+        -Content $Content
 
-    # Loop through all resource instances in the parsed configuration file. 
+    # Loop through all resource instances in the parsed configuration file.
     $i = 1
     foreach ($instance in $resourceInstances)
     {
@@ -205,16 +292,16 @@ function Start-CCMConfiguration
 
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
-                                                    -Parameters $Parameters
+            -Parameters $Parameters
 
         # Load the resource's module.
         if ($ResourceName -ne $currentLoadedModule)
         {
-            $ResourceInfo = Get-DSCResource -Name $ResourceName
+            $ResourceInfo = Get-DscResource -Name $ResourceName
             Import-Module $ResourceInfo.Path -Force -Verbose:$false
             $currentLoadedModule = $ResourceName
         }
-        
+
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Start-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
         $currentResult = Test-TargetResource @propertiesToSend
