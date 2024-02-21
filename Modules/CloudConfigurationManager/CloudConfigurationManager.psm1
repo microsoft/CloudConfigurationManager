@@ -11,6 +11,8 @@
         [System.Collections.Hashtable]
         $Parameters
     )
+
+    # Clone the instance to avoid modifying the original object.
     $currentInstance = ([System.Collections.Hashtable]$instance).Clone()
 
     $ResourceName = $currentInstance.ResourceName
@@ -225,7 +227,6 @@ function Test-CCMConfiguration
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
             -Parameters $Parameters
-
         # Load the resource's module.
         if ($ResourceName -ne $Global:currentLoadedModule.Name)
         {
