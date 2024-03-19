@@ -11,7 +11,6 @@
         [System.Collections.Hashtable]
         $Parameters
     )
-
     # Clone the instance to avoid modifying the original object.
     $currentInstance = ([System.Collections.Hashtable]$instance).Clone()
 
@@ -23,26 +22,15 @@
 
     Write-Verbose -Message "[Get-CCMPropertiesToSend]: Calling Get-CCMPropertiesToSend for {$ResourceInstanceName}"
 
-    # Retrieve information about the DSC resource
-    if ($ResourceName -ne $Global:currentLoadedModule.Name)
-    {
-        $dscResourceInfo = Get-DscResource -Name $ResourceName
-        Import-Module $dscResourceInfo.Path -Force -Verbose:$false
-        $Global:currentLoadedModule = $dscResourceInfo
-    }
-    else
-    {
-        $dscResourceInfo = $Global:currentLoadedModule
-    }
-
     $propertiesToSend = @{}
+    $dscResourceInfo = 
     foreach ($propertyName in $currentInstance.Keys)
     {
         # Retrieve the CIM Instance Property.
-        $CimProperty = $dscResourceInfo.Properties | Where-Object -FilterScript { $_.Name -eq $propertyName }
+        $CimProperty = $currentInstance.$propertyName
 
         # If the current propertry is a CIMInstance
-        if ($CimProperty.PropertyType.StartsWith('[MSFT_'))
+        if ($CimProperty.Keys -ne $null -and $CimProperty.Keys.Contains("CIMInstance"))
         {
             $cimResult = Expand-CCMCimProperty -CimInstanceValue $currentInstance.$propertyName
 
@@ -136,15 +124,6 @@ function Expand-CCMCimProperty
                         $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue[0]) | Out-Null
                     }
                 }
-
-                # if ($cimSubPropertyValue.GetType().Name -eq "OrderedDictionary")
-                # {
-                #     $cimSubPropertyValue = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValue
-                # }
-                # else
-                # {
-                #     $cimInstanceProperties.Add($cimSubPropertyName, $cimSubPropertyValue) | Out-Null
-                # }
             }
         }
 
@@ -167,21 +146,23 @@ function Get-CCMParsedResources
 
         [Parameter()]
         [System.String]
-        $Content
+        $Content,
+
+        [Parameter()]
+        [System.String]
+        $SchemaDefinition
     )
     # Convert the DSC Resources into PowerShell Objects
     $resourceInstances = $null
-    if (-not [System.String]::IsNullOrEmpty($Path))
+    if (-not [System.String]::IsNullOrEmpty($Path) -and [System.String]::IsNullOrEmpty($Content))
     {
-        $resourceInstances = ConvertTo-DSCObject -Path $path
+        $Content = Get-Content $Path -Raw
     }
-    elseif (-not [System.String]::IsNullOrEmpty($Content))
-    {
-        $resourceInstances = ConvertTo-DSCObject -Content $Content
-    }
+    $resourceInstances = ConvertTo-DSCObject -Content $Content `
+                                             -Schema $SchemaDefinition `
 
     # This will fix an issue with single resource configurations as in this case
-    # the return will be a single object. Therfore further processing of the object will fail.
+    # the return will be a single object. Therefore further processing of the object will fail.
     if ($resourceInstances -isnot [System.Array])
     {
         $resourceInstances = @($resourceInstances)
@@ -205,7 +186,15 @@ function Test-CCMConfiguration
 
         [Parameter()]
         [System.Collections.Hashtable]
-        $Parameters
+        $Parameters,
+
+        [Parameter()]
+        [System.String]
+        $SchemaDefinition,
+
+        [Parameter()]
+        [System.String]
+        $ModuleName
     )
     $TestResult = $true
     $Global:CCMAllDrifts = @()
@@ -213,27 +202,30 @@ function Test-CCMConfiguration
 
     # Parse the content of the content of the configuration file into an array of PowerShell object.
     $resourceInstances = Get-CCMParsedResources -Path $Path `
+        -SchemaDefinition $SchemaDefinition `
         -Content $Content
 
     # Loop through all resource instances in the parsed configuration file.
     $i = 1
+    $Global:CCMCurrentImportedModule = $null
     foreach ($instance in $resourceInstances)
     {
         $ResourceName = $instance.ResourceName
         $ResourceInstanceName = $instance.ResourceInstanceName
+
+        if ($Global:CCMCurrentImportedModule -ne $ResourceName)
+        {
+            $ModulePath = (Get-Module $ModuleName -ListAvailable).ModuleBase
+            $ResourcePath = Join-Path -Path $ModulePath -ChildPath "/DSCResources/MSFT_$ResourceName/MSFT_$ResourceName.psm1"
+            Import-Module $ResourcePath -Force
+            $Global:CCMCurrentImportedModule = $ResourceName
+        }
 
         Write-Verbose -Message "[Test-CCMConfiguration]: Resource [$i/$($resourceInstances.Length)]"
 
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
             -Parameters $Parameters
-        # Load the resource's module.
-        if ($ResourceName -ne $Global:currentLoadedModule.Name)
-        {
-            $ResourceInfo = Get-DscResource -Name $ResourceName
-            Import-Module $ResourceInfo.Path -Force -Verbose:$false
-            $Global:currentLoadedModule = $ResourceInfo
-        }
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
@@ -276,12 +268,21 @@ function Start-CCMConfiguration
 
         [Parameter()]
         [System.Collections.Hashtable]
-        $Parameters
+        $Parameters,
+
+        [Parameter()]
+        [System.String]
+        $SchemaDefinition,
+
+        [Parameter()]
+        [System.String]
+        $ModuleName
     )
     $Global:currentLoadedModule = ''
 
     # Parse the content of the content of the configuration file into an array of PowerShell object.
     $resourceInstances = Get-CCMParsedResources -Path $Path `
+        -SchemaDefinition $SchemaDefinition `
         -Content $Content
 
     # Loop through all resource instances in the parsed configuration file.
@@ -296,14 +297,6 @@ function Start-CCMConfiguration
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
             -Parameters $Parameters
-
-        # Load the resource's module.
-        if ($ResourceName -ne $Global:currentLoadedModule.Name)
-        {
-            $ResourceInfo = Get-DscResource -Name $ResourceName
-            Import-Module $ResourceInfo.Path -Force -Verbose:$false
-            $Global:currentLoadedModule = $ResourceInfo
-        }
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Start-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
