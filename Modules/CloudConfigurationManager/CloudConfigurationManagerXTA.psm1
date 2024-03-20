@@ -106,8 +106,7 @@ function Get-CCMPropertiesFromXTABlock
     # of the required type. Otherwise, simply instantiate a new Hashtable.
     if ($IsCIMInstance.IsPresent)
     {
-        $result = New-CimInstance -ClassName $InstanceType `
-                                  -ClientOnly
+        $result = [Microsoft.Management.Infrastructure.CimInstance]::new($InstanceType)
     }
     else
     {
