@@ -40,11 +40,13 @@
 
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
     NestedModules     = @(
-        'CloudConfigurationManager.psm1'
+        'CloudConfigurationManager.psm1',        
+        'CloudConfigurationManagerXTA.psm1'
     )
 
     CmdletsToExport   = @('Start-CCMConfiguration',
-        'Test-CCMConfiguration')
+                          'Test-CCMConfiguration',
+                          'Test-CCMConfigurationXTA')
 
     # Variables to export from this module
     VariablesToExport = '*'
