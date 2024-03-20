@@ -20,6 +20,7 @@
         $Credential
 
     )
+    $noDrifts = $true
     # Convert the XTA configuration to a JSON Object.
     $configuration = ConvertFrom-Json $Content
 
@@ -64,6 +65,10 @@
         # Call the Test-TargetResource of the current resource with the formated
         # parameters.
         $TestResult = Test-TargetResource @parameters -Credential $Credential
+        if (-not $TestResult)
+        {
+            $noDrifts = $false
+        }
     }
 
     #region Cleanup Global Variables
@@ -72,7 +77,7 @@
     $Global:CCMMappings              = $null
     #endregion
 
-    return $TestResult
+    return $noDrifts
 }
 
 function Get-CCMPropertiesFromXTABlock
@@ -153,7 +158,22 @@ function Get-CCMPropertiesFromXTABlock
                                                         -InstanceType $ResourceType `
                                                         -IsCIMInstance
             }
-            $result.Add($key, $value)
+            if ($result.GetType().Name -eq 'CIMInstance')
+            {
+                if ($value.GetType().Name -eq 'Object[]')
+                {
+                    $cimProperty = [Microsoft.Management.Infrastructure.CIMProperty]::Create($key, [CIMInstance[]]$value, 'Property')
+                }
+                else
+                {
+                    $cimProperty = [Microsoft.Management.Infrastructure.CIMProperty]::Create($key, [CIMInstance]$value, 'Property')
+                }
+                $result.CimInstanceProperties.Add($cimProperty) | Out-Null
+            }
+            else
+            {
+                $result.Add($key, $value)
+            }
         }
         else
         {

@@ -163,7 +163,7 @@
     IntuneRoleAssignment = ''
     IntuneRoleDefinition = ''
     IntuneSettingCatalogASRRulesPolicyWindows10 = ''
-    IntuneSettingCatalogCustomPolicyWindows10 = ''
+    '/Microsoft/Intune/SettingCatalog/CustomPolicy/Windows10' = 'IntuneSettingCatalogCustomPolicyWindows10'
     IntuneWifiConfigurationPolicyAndroidDeviceAdministrator = ''
     IntuneWifiConfigurationPolicyAndroidEnterpriseDeviceOwner = ''
     IntuneWifiConfigurationPolicyAndroidEnterpriseWorkProfile = ''
