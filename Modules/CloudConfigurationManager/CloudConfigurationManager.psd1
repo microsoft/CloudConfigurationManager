@@ -12,7 +12,7 @@
     RootModule        = 'CloudConfigurationManager.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.0.0.1'
+    ModuleVersion     = '1.0.0.2'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -45,8 +45,7 @@
     )
 
     CmdletsToExport   = @('Start-CCMConfiguration',
-                          'Test-CCMConfiguration',
-                          'Test-CCMConfigurationXTA')
+                          'Test-CCMConfiguration')
 
     # Variables to export from this module
     VariablesToExport = '*'
