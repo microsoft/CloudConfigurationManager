@@ -70,6 +70,29 @@
                     }
                 }
             }
+            elseif ($propertyValue.GetType().Name -eq 'Object[]')
+            {
+                $newValue = @()
+                foreach ($parameterSpecified in $Parameters.Keys)
+                {
+                    foreach ($entry in $propertyValue)
+                    {
+                        if ($entry.Contains("`$$parameterSpecified"))
+                        {
+                            if ($Parameters.$parameterSpecified.GetType().Name -eq 'String')
+                            {
+                                $newValue += $propertyValue.Replace("`$$parameterSpecified", $Parameters.$parameterSpecified)
+                            }
+                            else
+                            {
+                                $newValue += $Parameters.$parameterSpecified
+                            }
+                            break
+                        }
+                    }
+                }
+                $propertyValue = $newValue
+            }
 
             $propertiesToSend.Add($propertyName, $propertyValue)
         }
