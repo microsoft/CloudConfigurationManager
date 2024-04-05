@@ -73,12 +73,14 @@
             elseif ($propertyValue.GetType().Name -eq 'Object[]')
             {
                 $newValue = @()
-                foreach ($parameterSpecified in $Parameters.Keys)
+                foreach ($entry in $propertyValue)
                 {
-                    foreach ($entry in $propertyValue)
-                    {
+                    $foundParameter = $false
+                    foreach ($parameterSpecified in $Parameters.Keys)
+                    {                    
                         if ($entry.Contains("`$$parameterSpecified"))
                         {
+                            $foundParameter = $true
                             if ($Parameters.$parameterSpecified.GetType().Name -eq 'String')
                             {
                                 $newValue += $propertyValue.Replace("`$$parameterSpecified", $Parameters.$parameterSpecified)
@@ -89,6 +91,10 @@
                             }
                             break
                         }
+                    }
+                    if (-not $foundParameter)
+                    {                        
+                        $newValue += $entry
                     }
                 }
                 $propertyValue = $newValue
