@@ -23,7 +23,7 @@
     Write-Verbose -Message "[Get-CCMPropertiesToSend]: Calling Get-CCMPropertiesToSend for {$ResourceInstanceName}"
 
     $propertiesToSend = @{}
-    $dscResourceInfo = 
+    $dscResourceInfo =
     foreach ($propertyName in $currentInstance.Keys)
     {
         # Retrieve the CIM Instance Property.
@@ -70,15 +70,15 @@
                     }
                 }
             }
-            elseif ($propertyValue.GetType().Name -eq 'Object[]')
+            elseif ($null -ne $propertyValue -and $propertyValue.GetType().Name -eq 'Object[]')
             {
                 $newValue = @()
                 foreach ($entry in $propertyValue)
                 {
                     $foundParameter = $false
                     foreach ($parameterSpecified in $Parameters.Keys)
-                    {                    
-                        if ($entry.Contains("`$$parameterSpecified"))
+                    {
+                        if ($null -ne $entry -and $entry.Contains("`$$parameterSpecified"))
                         {
                             $foundParameter = $true
                             if ($Parameters.$parameterSpecified.GetType().Name -eq 'String')
@@ -93,7 +93,7 @@
                         }
                     }
                     if (-not $foundParameter)
-                    {                        
+                    {
                         $newValue += $entry
                     }
                 }
@@ -213,6 +213,10 @@ function Test-CCMConfiguration
         [System.String]
         $Content,
 
+        [Parameter(ParameterSetName = 'PreParsed')]
+        [Array]
+        $ResourceInstances,
+
         [Parameter()]
         [System.Collections.Hashtable]
         $Parameters,
@@ -227,12 +231,14 @@ function Test-CCMConfiguration
     )
     $TestResult = $true
     $Global:CCMAllDrifts = @()
-    $Global:currentLoadedModule = ''
 
-    # Parse the content of the content of the configuration file into an array of PowerShell object.
-    $resourceInstances = Get-CCMParsedResources -Path $Path `
-        -SchemaDefinition $SchemaDefinition `
-        -Content $Content
+    if ($null -eq $ResourceInstances)
+    {
+        # Parse the content of the content of the configuration file into an array of PowerShell object.
+        $ResourceInstances = Get-CCMParsedResources -Path $Path `
+            -SchemaDefinition $SchemaDefinition `
+            -Content $Content
+    }
 
     # Loop through all resource instances in the parsed configuration file.
     $i = 1
@@ -255,6 +261,10 @@ function Test-CCMConfiguration
         # Retrieve the Hashtable representing the parameters to be sent to the Test method.
         $propertiesToSend = Get-CCMPropertiesToSend -Instance $instance `
             -Parameters $Parameters
+
+        # Remove DSC specific properties
+        $propertiesToSend.Remove('DependsOn') | Out-Null
+        $propertiesToSend.Remove('PSDSCRunAsCredential') | Out-Null
 
         # Evaluate the properties of the current resource.
         Write-Verbose -Message "[Test-CCMConfiguration]: Calling Test-TargetResource for {$ResourceInstanceName}"
@@ -307,7 +317,6 @@ function Start-CCMConfiguration
         [System.String]
         $ModuleName
     )
-    $Global:currentLoadedModule = ''
 
     # Parse the content of the content of the configuration file into an array of PowerShell object.
     $resourceInstances = Get-CCMParsedResources -Path $Path `
