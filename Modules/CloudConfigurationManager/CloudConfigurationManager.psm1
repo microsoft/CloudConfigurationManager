@@ -40,7 +40,7 @@
             }
             else
             {
-                $propertiesToSend.Add($propertyName, [Microsoft.Management.Infrastructure.CimInstance[]]$cimResult)
+                $propertiesToSend.Add($propertyName, $cimResult)
             }
         }
         else
@@ -147,6 +147,10 @@ function Expand-CCMCimProperty
                     if ($cimSubPropertyValueItem -is [System.Collections.Specialized.OrderedDictionary])
                     {
                         $cimSubPropertyValueItem = Expand-CCMCimProperty -CimInstanceValue $cimSubPropertyValueItem
+                        if ($cimSubPropertyValueItem.Length -eq 1)
+                        {
+                            $cimSubPropertyValueItem = [Microsoft.Management.Infrastructure.CimInstance]$cimSubPropertyValueItem[0]
+                        }
                     }
                     else
                     {
@@ -156,8 +160,43 @@ function Expand-CCMCimProperty
             }
         }
 
+        # Scan through the properties of the current CIMInstance to see if there are nested CIMInstances
+        $newCimInstanceObject = @{}
+        foreach ($topKey in $cimInstanceProperties.Keys)
+        {
+            if ($cimInstanceProperties.$topKey.GetType().ToString() -eq 'System.Collections.Hashtable')
+            {
+                $newSubCim = @{}
+                foreach ($subKey in $cimInstanceProperties.$topKey.Keys)
+                {
+                    if ($cimInstanceProperties.$topKey.$subKey.GetType().ToString() -eq 'System.Collections.Hashtable' -and `
+                        $cimInstanceProperties.$topKey.$subKey.ContainsKey('CIMInstance'))
+                    {
+                        $subProperties = ([Hashtable]$cimInstanceProperties.$topKey.$subKey).Clone()
+                        $subProperties.Remove('CIMInstance') | Out-Null
+                        $subCIM = New-CimInstance -ClassName "$($cimInstanceProperties.$topKey.$subKey.CIMInstance)" `
+                                                  -Property $subProperties `
+                                                  -ClientOnly
+                        $newSubCim.Add($subKey, $subCim)
+                    }
+                    elseif ($subKey -ne 'CIMInstance')
+                    {
+                        $newSubCim.Add($subKey, $cimInstanceProperties.$topKey.$subKey)
+                    }
+                }
+                $currentCIMInstance = New-CIMInstance -ClassName $cimInstanceProperties.$topKey.CIMInstance `
+                                                      -Property $newSubCim `
+                                                      -ClientOnly
+                $newCimInstanceObject.Add($topKey, $currentCIMInstance)
+            }
+            elseif ($topKey -ne 'CIMInstance')
+            {
+                $newCimInstanceObject.Add($topKey, $cimInstanceProperties.$topKey)
+            }
+        }
+
         $cimResults += New-CimInstance -ClassName "$($cimInstance.CIMInstance)" `
-            -Property $cimInstanceProperties `
+            -Property $newCimInstanceObject `
             -ClientOnly
     }
 
