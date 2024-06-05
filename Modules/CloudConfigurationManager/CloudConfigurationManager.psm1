@@ -189,13 +189,25 @@ function Get-CCMSubCIMInstances
             foreach ($subKey in $cimInstanceProperties.$topKey.Keys)
             {
                 if (($cimInstanceProperties.$topKey.$subKey.GetType().ToString() -eq 'System.Collections.Hashtable' -and `
-                    $cimInstanceProperties.$topKey.$subKey.ContainsKey('CIMInstance')) -or `
-                    $cimInstanceProperties.$topKey.$subKey.GetType().ToString() -eq 'System.Object[]')
+                    $cimInstanceProperties.$topKey.$subKey.ContainsKey('CIMInstance')))
                 {
                     $curSubCim = Get-CCMSubCIMInstances -cimInstanceProperties $cimInstanceProperties.$topkey
                     $curSubCimInstance = New-CIMInstance -ClassName $cimInstanceProperties.$topKey.CIMInstance `
                                                          -Property $curSubCim -ClientOnly
                     $newSubCim.Add($subkey, $curSubCimInstance.$subKey)
+                }
+                elseif ($cimInstanceProperties.$topKey.$subKey.GetType().ToString() -eq 'System.Object[]')
+                {
+                    $entryValues = @()
+                    foreach ($entry in $cimInstanceProperties.$topKey.$subKey)
+                    {
+                        $curSubCim = Get-CCMSubCIMInstances -cimInstanceProperties $entry
+                        $curSubCimInstance = New-CIMInstance -ClassName $entry.CIMInstance `
+                                                             -Property $curSubCim -ClientOnly
+                        $entryValues += $curSubCimInstance
+                    }
+                    
+                    $newSubCim.Add($subkey, [CIMInstance[]]$entryValues)
                 }
                 elseif ($subKey -ne 'CIMInstance')
                 {
